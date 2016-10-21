@@ -1,0 +1,136 @@
+Gomobile is good, but it can't prepare your app for release.  Here are the detailed steps to follow to create a release application.  There are a lot, and they are fiddly and frustrating, but at the end you have an app on the appstore!
+
+The general plan is to use gomobile to compile the debug application, then we will upack it, merge it with a "normal" android java project, then build that.  This took me 24 hours of pure misery to figure out, so I hope to save you the same pain.
+
+To start with, get your go program working with gomobile.  You should be able to "gomobile install yourprog" and have it work on your phone.
+
+Now, create an android project
+
+    android create project --target 1 --name YourProjectName --path YourProjectName --activity YourPorjectName  --package com.YourCompany.YourProjectName
+
+This creates an empty android project in the YourProjectName directory.  Now we are going to customise it.
+
+Open AndroidManifest.xml and make sure that the activity line looks like this:
+
+    <activity android:name="org.golang.app.GoNativeActivity"
+
+While you are in there, check that your project name is correct, and that you have the correct permissions (xxx add link to permissions here).
+
+Now you have to install the java wrapper that will call your go code:
+
+    mkdir -p org/golang/app/GoNativeActivity
+    cp $GOPATH/golang.org/x/mobile/app/GoNativeActivity.java org/golang/app/GoNativeActivity/
+
+Now unzip your gomobile apk
+
+    mkdir temp
+    cd temp
+    unzip ../gomobile-debug.apk
+    cd ..
+    cp -r temp/lib .
+
+This moves the golang code into the right place.  But how will ant know to include this directory in the build?  Now it gets messy.
+
+Locate the sdk build.xml file
+    
+    find / -name build.xml
+
+Open it and copy out the section that looks like:
+
+    <target name="-package-resources" depends="-crunch">
+
+and add it to your project's build.xml, just ahead of this line:
+
+    <import file="${sdk.dir}/tools/ant/build.xml" />
+
+This will override the standard build.xml process.  Add the commands to include your lib directory at the end of the package-resources xml block:
+
+            <exec executable="zip" failonerror="true">
+                <arg value="-r" />
+                <arg value="${out.absolute.dir}/${resource.package.file.name}" />
+                <arg value="lib" />
+            </exec>
+
+I have included an example at the end of this file, I recommend that you don't just copy-n-paste it, because build.xml can change between releases.
+
+Now you should be able to build and install your ant project:
+
+    ant debug
+    adb install bin/YourProjectName-debug.apk
+
+but when you go to upload this to the store, it doesn't work!  Google doesn't allow you to upload debug versions.  You will have to create a release version, and to do that, you will need a release key.  Luckily, you can make this yourself:
+
+    keytool -genkey -v -keystore my-key.keystore -alias alias_name -keyalg RSA -keysize 2048 -validity 10000
+
+my-key.keystore is the file the key will live in, and alias_name is any name that you make up for your key.
+
+*** WARNING *** WARNING·*** WARNING·*** WARNING·*** WARNING·*** WARNING·*** WARNING·*** WARNING·*** WARNING·
+
+You need to back up the keystore file.  SERIOUSLY.  DO IT NOW.  It is the *only* way for you to upload updates to your app.  If you lose this file, you will never be able to update your app.  You would have to create a new one, with a new key.
+
+*** WARNING *** WARNING·*** WARNING·*** WARNING·*** WARNING·*** WARNING·*** WARNING·*** WARNING·*** WARNING·
+
+Now edit ant.properties and add these two lines:
+
+    key.store=my-key.keystore
+    key.alias=alias_name
+
+now you can run
+
+    ant release
+
+type in your key password, and you will have a release package!  Upload it to google store and enjoy!
+
+Some google services require your key fingerprint to work, and you can get it like this:
+
+    keytool -list -v -keystore [keystore path] -alias [alias-name] -storepass [storepass] -keypass [keypass] 
+
+References:
+https://coderwall.com/p/r09hoq/android-generate-release-debug-keystores
+http://gamedev.stackexchange.com/questions/10894/how-can-i-refer-to-android-assets-in-other-directories
+https://developer.android.com/guide/topics/manifest/application-element.html
+https://developer.android.com/guide/topics/manifest/permission-element.html
+
+
+example ending for build.xml:
+
+  <target name="-package-resources" depends="-crunch">
+           <aapt executable="${aapt}"
+                    command="package"
+                    versioncode="${version.code}"
+                    versionname="${version.name}"
+                    debug="${build.is.packaging.debug}"
+                    manifest="${out.manifest.abs.file}"
+                    assets="${asset.absolute.dir}"
+                    androidjar="${project.target.android.jar}"
+                    apkfolder="${out.absolute.dir}"
+                    nocrunch="${build.packaging.nocrunch}"
+                    resourcefilename="${resource.package.file.name}"
+                    resourcefilter="${aapt.resource.filter}"
+                    libraryResFolderPathRefid="project.library.res.folder.path"
+                    libraryPackagesRefid="project.library.packages"
+                    libraryRFileRefid="project.library.bin.r.file.path"
+                    previousBuildType="${build.last.target}"
+                    buildType="${build.target}"
+                    ignoreAssets="${aapt.ignore.assets}">
+                <res path="${out.res.absolute.dir}" />
+                <res path="${resource.absolute.dir}" />
+                <!-- <nocompress /> forces no compression on any files in assets or res/raw -->
+                <!-- <nocompress extension="xml" /> forces no compression on specific file extensions in assets and res/raw -->
+            </aapt>
+
+            <exec executable="zip" failonerror="true">
+                <arg value="-r" />
+                <arg value="${out.absolute.dir}/${resource.package.file.name}" />
+                <arg value="lib" />
+            </exec>
+            <exec executable="zip" failonerror="true">
+                <arg value="-r" />
+                <arg value="${out.absolute.dir}/${resource.package.file.name}" />
+                <arg value="res" />
+            </exec>
+    </target>
+
+    <import file="${sdk.dir}/tools/ant/build.xml" />
+
+
