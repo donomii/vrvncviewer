@@ -54,21 +54,28 @@ if err != nil {
         requestUpdate(vc)
         startDrawing = true
         for msg := range vcc.ServerMessageCh {
+            //log.Printf("Got message\n")
             requestUpdate(vc)
             startDrawing = true
+            bpp := uint(4)
 
             switch msg.Type() {
             case vnc.FramebufferUpdateMsg:
             rects := msg.(*vnc.FramebufferUpdate).Rects
             for _,v := range rects {
             startDrawing = true
+        //The graphics buffers are ready, we can start using them, even if they are blank
+        startDrawing = true
+
+
             for i:=uint(0);i<uint(v.Height); i++ {
-                start := (uint(v.Y)+i)*clientWidth*3 + uint(v.X)*3
+                start := (uint(v.Y)+i)*clientWidth*bpp + uint(v.X)*bpp
                 for j := uint(0);j<uint(v.Width);j++ {
                     c := v.Enc.(*vnc.RawEncoding).Colors[i*uint(v.Width)+j]
-                    u8Pix[start+j*3] = uint8(c.R)
-                    u8Pix[start+j*3+1] = uint8(c.G)
-                    u8Pix[start+j*3+2] = uint8(c.B)
+                    u8Pix[start+j*bpp] = uint8(c.R)
+                    u8Pix[start+j*bpp+1] = uint8(c.G)
+                    u8Pix[start+j*bpp+2] = uint8(c.B)
+                    u8Pix[start+j*bpp+3] = uint8(255)
                 }
             }
         }
@@ -77,6 +84,7 @@ if err != nil {
     scanOn = true
 }
 
+// processImage receives images through a chan, decodes them an updates the texture
 func requestUpdates (vc *vnc.ClientConn) {
     time.Sleep(100*time.Millisecond)
     requestUpdate(vc)

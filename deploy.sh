@@ -12,7 +12,7 @@ mkdir temp
 cd temp
 unzip ../vrvncviewer.apk
 cd ..
-cp temp/lib/armeabi-v7a/libvrvncviewerDebug.so  vrvncviewerDeploy/lib/armeabi-v7a/libvrvncviewer.so
+cp temp/lib/armeabi-v7a/libvrvncviewer.so  vrvncviewerDeploy/lib/armeabi-v7a/libvrvncviewer.so
 cd vrvncviewerDeploy
 ant clean
 ant release

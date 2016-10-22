@@ -235,7 +235,7 @@ func main() {
                 a.Publish()
                 // Drive the animation by preparing to paint the next frame
                 // after this one is shown.
-                time.Sleep(100 * time.Millisecond)
+                time.Sleep(20 * time.Millisecond) //FIXME only sleep the rest of the timeslice
                 a.Send(paint.Event{})
             case touch.Event:
                 theatreCamera = mgl32.LookAt(0.0, 0.0, 0.1, 0.0, 0.0, -0.5, 0.0, 1.0, 0.0)
@@ -367,14 +367,14 @@ func onStart(glctx gl.Context) {
     glctx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
 
-    //images = glutil.NewImages(glctx)
-    //fps = debug.NewFPS(images)
+    images = glutil.NewImages(glctx)
+    fps = debug.NewFPS(images)
 }
 
 func onStop(glctx gl.Context) {
     log.Printf("Stopping...")
-    //glctx.DeleteProgram(program)
-    //glctx.DeleteBuffer(buf)
+    glctx.DeleteProgram(program)
+    glctx.DeleteBuffer(buf)
     fps.Release()
     images.Release()
 }
@@ -411,8 +411,20 @@ func pasteText(tSize float64, ypos int, text string, u8Pix []uint8, transparent 
 }
 
 
+var lastDraw time.Time
 
 func onPaint(glctx gl.Context, sz size.Event) {
+    now := time.Now()
+    f := 0
+    if dur := now.Sub(lastDraw); dur > 0 {
+        f = int(time.Second / dur)
+        timeSlice := time.Millisecond * 20
+        remain := timeSlice-dur
+        time.Sleep(remain)
+    }
+    lastDraw=now
+    pasteText(50.0, 1, fmt.Sprintf("%v", f), u8Pix, false)
+
     glctx.Enable(gl.BLEND)
     glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     glctx.Enable( gl.DEPTH_TEST );
@@ -423,7 +435,7 @@ func onPaint(glctx gl.Context, sz size.Event) {
     glctx.UseProgram(program)
 
 
-    
+
     glctx.TexImage2D(gl.TEXTURE_2D, 0, int(clientWidth), int(clientHeight), gl.RGBA, gl.UNSIGNED_BYTE, u8Pix)
 
 
@@ -455,6 +467,8 @@ func onPaint(glctx gl.Context, sz size.Event) {
     glctx.Viewport(sz.WidthPx/2,0, sz.WidthPx/2, sz.HeightPx)
     glctx.DrawArrays(gl.TRIANGLES, 0, 6)
     glctx.DisableVertexAttribArray(position)
+    
+    //fps.Draw(sz)
 }
 
 type vertexMeta struct {
