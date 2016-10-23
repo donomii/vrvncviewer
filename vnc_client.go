@@ -1,6 +1,5 @@
 package main
 
-import "math"
 import "image"
 import "github.com/donomii/go-vnc"
 import "net"
@@ -10,10 +9,6 @@ import "golang.org/x/net/context"
 
 var im *image.NRGBA
 
-
-func NextPo2(n int) int {
-    return int(math.Pow(2,math.Ceil(math.Log2(float64(n)))))
-}
 
 func run_vnc (server_port string) {
 // Establish TCP connection to VNC server.
@@ -63,15 +58,15 @@ if err != nil {
             case vnc.FramebufferUpdateMsg:
             rects := msg.(*vnc.FramebufferUpdate).Rects
             for _,v := range rects {
-            startDrawing = true
-        //The graphics buffers are ready, we can start using them, even if they are blank
-        startDrawing = true
+                startDrawing = true
+                //The graphics buffers are ready, we can start using them, even if they are blank
+                startDrawing = true
 
-
+            cols := v.Enc.(*vnc.RawEncoding).Colors
             for i:=uint(0);i<uint(v.Height); i++ {
                 start := (uint(v.Y)+i)*clientWidth*bpp + uint(v.X)*bpp
                 for j := uint(0);j<uint(v.Width);j++ {
-                    c := v.Enc.(*vnc.RawEncoding).Colors[i*uint(v.Width)+j]
+                    c := cols[i*uint(v.Width)+j]
                     u8Pix[start+j*bpp] = uint8(c.R)
                     u8Pix[start+j*bpp+1] = uint8(c.G)
                     u8Pix[start+j*bpp+2] = uint8(c.B)
