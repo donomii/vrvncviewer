@@ -29,7 +29,6 @@
 package main
 
 import "github.com/pkg/profile"
-import "image/color"
 import (
     "strings"
     "net"
@@ -38,6 +37,7 @@ import (
     "log"
     "runtime"
 
+    "image/color"
     "golang.org/x/mobile/app"
     "golang.org/x/mobile/event/lifecycle"
     "golang.org/x/mobile/event/paint"
@@ -58,8 +58,8 @@ import (
 import "github.com/go-gl/mathgl/mgl32"
         import "golang.org/x/mobile/exp/sensor"
 
-var clientWidth=uint(1024)
-var clientHeight=uint(768)
+var clientWidth=uint(800)
+var clientHeight=uint(600)
 var u8Pix []uint8
 var (
     startDrawing bool
@@ -160,13 +160,14 @@ var texData = f32.Bytes(binary.LittleEndian,
 
 
 func do_profile() {
-    defer profile.Start(profile.MemProfile).Stop()
+    //defer profile.Start(profile.MemProfile).Stop()
     //defer profile.Start(profile.TraceProfile).Stop()
-    //defer profile.Start(profile.CPUProfile).Stop()
+    defer profile.Start(profile.CPUProfile).Stop()
     time.Sleep(60*time.Second)
 }
-
+var activeFormatter FormatParams
 func main() {
+    activeFormatter = FormatParams{&color.RGBA{255,255,255,255},0,0, 50.0,0,0}
     log.Printf("Starting main...")
     sceneCam = sceneCamera.New()
     runtime.GOMAXPROCS(2)
@@ -235,7 +236,6 @@ func main() {
                 a.Publish()
                 // Drive the animation by preparing to paint the next frame
                 // after this one is shown.
-                time.Sleep(20 * time.Millisecond) //FIXME only sleep the rest of the timeslice
                 a.Send(paint.Event{})
             case touch.Event:
                 theatreCamera = mgl32.LookAt(0.0, 0.0, 0.1, 0.0, 0.0, -0.5, 0.0, 1.0, 0.0)
@@ -302,11 +302,7 @@ func scanHosts() {
     //log.Printf("IP: %v\n", classC)
     for j:=1;j<255;j++ {
         if scanOn {
-            pasteText(50.0, 0, 0, "Scanning/ようそこう", u8Pix, false)
-            pasteText(50.0, 0, 64, ip_chunks[0], u8Pix, false)
-            pasteText(50.0, 10, 128, ip_chunks[1], u8Pix, false)
-            pasteText(50.0, 20, 192, ip_chunks[2], u8Pix, false)
-            pasteText(50.0, 30, 256, fmt.Sprintf("%v", j), u8Pix, false)
+            RenderPara(&activeFormatter, 240,240, 800, 600, u8Pix, fmt.Sprintf("Scanning\n%v.%v.%v.%v", ip_chunks[0], ip_chunks[1], ip_chunks[2], fmt.Sprintf("%v", j)), false, true)
             testIP := fmt.Sprintf("%v.%v", classC, j)
             //log.Printf("testIP: %v\n", testIP)
             <-connectCh
@@ -315,6 +311,7 @@ func scanHosts() {
             <-connectCh
             //fmt.Printf("http://%v:8080/\n",testIP)
             go http_mjpeg(fmt.Sprintf("http://%v:8080/",testIP))
+        } else {
         }
     }
     time.Sleep(500*time.Millisecond)
@@ -368,16 +365,16 @@ func onStart(glctx gl.Context) {
     glctx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
 
-    images = glutil.NewImages(glctx)
-    fps = debug.NewFPS(images)
+    //images = glutil.NewImages(glctx)
+    //fps = debug.NewFPS(images)
 }
 
 func onStop(glctx gl.Context) {
     log.Printf("Stopping...")
-    glctx.DeleteProgram(program)
-    glctx.DeleteBuffer(buf)
-    fps.Release()
-    images.Release()
+    //glctx.DeleteProgram(program)
+    //glctx.DeleteBuffer(buf)
+    //fps.Release()
+    //images.Release()
 }
 
 func transpose( m mgl32.Mat4) mgl32.Mat4{
@@ -389,29 +386,6 @@ func transpose( m mgl32.Mat4) mgl32.Mat4{
     return r
 }
 
-func pasteText(tSize float64, xpos, ypos int, text string, u8Pix []uint8, transparent bool) {
-    img := DrawStringRGBA(50.0, color.RGBA{255,255,255,255}, text)
-    po2 := uint(NextPo2(img.Bounds().Max.X)*2) //Choose next higer power of 2
-    //log.Printf("Chose texture size: %v\n", po2)
-    wordBuff := paintTexture (img, nil, po2)
-    startDrawing = true
-    bpp := uint(4)  //bytes per pixel
-
-    h:= img.Bounds().Max.Y
-    w:= uint(img.Bounds().Max.X)
-    for i:=uint(0);i<uint(h); i++ {
-        for j := uint(0);j<w; j++ {
-            if (wordBuff[i*po2*4 + j*4]>128) || !transparent {
-                u8Pix[(uint(ypos)+i)*clientWidth*bpp+(uint(xpos)+j)*bpp] = wordBuff[i*po2*4 + j*4]
-                u8Pix[(uint(ypos)+i)*clientWidth*bpp+(uint(xpos)+j)*bpp +1] = wordBuff[i*po2*4 + j*4 +1]
-                u8Pix[(uint(ypos)+i)*clientWidth*bpp+(uint(xpos)+j)*bpp +2] = wordBuff[i*po2*4 + j*4 +2]
-                u8Pix[(uint(ypos)+i)*clientWidth*bpp+(uint(xpos)+j)*bpp +3] = wordBuff[i*po2*4 + j*4 +3]
-            }
-        }
-    }
-}
-
-
 var lastDraw time.Time
 
 func onPaint(glctx gl.Context, sz size.Event) {
@@ -419,13 +393,17 @@ func onPaint(glctx gl.Context, sz size.Event) {
     f := 0
     if dur := now.Sub(lastDraw); dur > 0 {
         f = int(time.Second / dur)
-        timeSlice := time.Millisecond * 20
+        timeSlice := time.Millisecond * 16 //Have to maintain 60fps to stop user getting sick
         remain := timeSlice-dur
-        time.Sleep(remain)
+        if remain > 0 {
+            return
+        }
     }
     lastDraw=now
-    pasteText(50.0, 1, 1, fmt.Sprintf("%v", f), u8Pix, false)
-
+    PasteText(50.0, 1, 1, fmt.Sprintf("%v", f), u8Pix, false)
+    if !scanOn {
+        RenderPara(&activeFormatter, 240,0, 800, 600, u8Pix, "Connected", true, true)
+    }
     glctx.Enable(gl.BLEND)
     glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     glctx.Enable( gl.DEPTH_TEST );
@@ -436,7 +414,7 @@ func onPaint(glctx gl.Context, sz size.Event) {
     glctx.UseProgram(program)
 
 
-
+    
     glctx.TexImage2D(gl.TEXTURE_2D, 0, int(clientWidth), int(clientHeight), gl.RGBA, gl.UNSIGNED_BYTE, u8Pix)
 
 
@@ -468,8 +446,6 @@ func onPaint(glctx gl.Context, sz size.Event) {
     glctx.Viewport(sz.WidthPx/2,0, sz.WidthPx/2, sz.HeightPx)
     glctx.DrawArrays(gl.TRIANGLES, 0, 6)
     glctx.DisableVertexAttribArray(position)
-    
-    //fps.Draw(sz)
 }
 
 type vertexMeta struct {
