@@ -302,10 +302,11 @@ func scanHosts() {
     //log.Printf("IP: %v\n", classC)
     for j:=1;j<255;j++ {
         if scanOn {
-            pasteText(50.0, 0, ip_chunks[0], u8Pix, false)
-            pasteText(50.0, 64, ip_chunks[1], u8Pix, false)
-            pasteText(50.0, 128, ip_chunks[2], u8Pix, false)
-            pasteText(50.0, 192, fmt.Sprintf("%v", j), u8Pix, false)
+            pasteText(50.0, 0, 0, "Scanning/ようそこう", u8Pix, false)
+            pasteText(50.0, 0, 64, ip_chunks[0], u8Pix, false)
+            pasteText(50.0, 10, 128, ip_chunks[1], u8Pix, false)
+            pasteText(50.0, 20, 192, ip_chunks[2], u8Pix, false)
+            pasteText(50.0, 30, 256, fmt.Sprintf("%v", j), u8Pix, false)
             testIP := fmt.Sprintf("%v.%v", classC, j)
             //log.Printf("testIP: %v\n", testIP)
             <-connectCh
@@ -388,9 +389,9 @@ func transpose( m mgl32.Mat4) mgl32.Mat4{
     return r
 }
 
-func pasteText(tSize float64, ypos int, text string, u8Pix []uint8, transparent bool) {
+func pasteText(tSize float64, xpos, ypos int, text string, u8Pix []uint8, transparent bool) {
     img := DrawStringRGBA(50.0, color.RGBA{255,255,255,255}, text)
-    po2 := uint(NextPo2(img.Bounds().Max.X)*2)
+    po2 := uint(NextPo2(img.Bounds().Max.X)*2) //Choose next higer power of 2
     //log.Printf("Chose texture size: %v\n", po2)
     wordBuff := paintTexture (img, nil, po2)
     startDrawing = true
@@ -401,10 +402,10 @@ func pasteText(tSize float64, ypos int, text string, u8Pix []uint8, transparent 
     for i:=uint(0);i<uint(h); i++ {
         for j := uint(0);j<w; j++ {
             if (wordBuff[i*po2*4 + j*4]>128) || !transparent {
-                u8Pix[(uint(ypos)+i)*clientWidth*bpp+j*bpp] = wordBuff[i*po2*4 + j*4]
-                u8Pix[(uint(ypos)+i)*clientWidth*bpp+j*bpp +1] = wordBuff[i*po2*4 + j*4 +1]
-                u8Pix[(uint(ypos)+i)*clientWidth*bpp+j*bpp +2] = wordBuff[i*po2*4 + j*4 +2]
-                u8Pix[(uint(ypos)+i)*clientWidth*bpp+j*bpp +3] = wordBuff[i*po2*4 + j*4 +3]
+                u8Pix[(uint(ypos)+i)*clientWidth*bpp+(uint(xpos)+j)*bpp] = wordBuff[i*po2*4 + j*4]
+                u8Pix[(uint(ypos)+i)*clientWidth*bpp+(uint(xpos)+j)*bpp +1] = wordBuff[i*po2*4 + j*4 +1]
+                u8Pix[(uint(ypos)+i)*clientWidth*bpp+(uint(xpos)+j)*bpp +2] = wordBuff[i*po2*4 + j*4 +2]
+                u8Pix[(uint(ypos)+i)*clientWidth*bpp+(uint(xpos)+j)*bpp +3] = wordBuff[i*po2*4 + j*4 +3]
             }
         }
     }
@@ -423,7 +424,7 @@ func onPaint(glctx gl.Context, sz size.Event) {
         time.Sleep(remain)
     }
     lastDraw=now
-    pasteText(50.0, 1, fmt.Sprintf("%v", f), u8Pix, false)
+    pasteText(50.0, 1, 1, fmt.Sprintf("%v", f), u8Pix, false)
 
     glctx.Enable(gl.BLEND)
     glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
