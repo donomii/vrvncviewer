@@ -44,20 +44,20 @@ func readAll(r io.Reader, buf *bytes.Buffer) (err error) {
 
 // processHttp receives the HTTP data and tries to decodes images. The images 
 // are sent through a chan for further processing.
-func processHttp(response *http.Response, nextImg chan *image.Image, quit chan bool) {
+func processHttp(response *http.Response, nextChunk, freeChunks chan *bytes.Buffer, nextImg chan *image.Image, quit chan bool) {
     decoder,_ := NewDecoderFromResponse(response)
     defer response.Body.Close()
     defer close(nextImg)
-    buf := bytes.NewBuffer(make([]byte, 0, 1024*1024*10))
     scanOn=false
     for {
-        buf.Truncate(0)
         select {
         case <-quit:
             close(nextImg)
             scanOn=true
             return
         default:
+            buf := <- freeChunks
+            buf.Truncate(0)
             p, err := decoder.r.NextPart()
             if err == io.EOF {
                 close(nextImg)
@@ -74,6 +74,27 @@ func processHttp(response *http.Response, nextImg chan *image.Image, quit chan b
                 scanOn=true
                 return
             }
+            if (len(freeChunks)>0) {
+                nextChunk <- buf
+            }
+        }
+    }
+}
+
+
+// processHttp receives the HTTP data and tries to decodes images. The images 
+// are sent through a chan for further processing.
+func processChunk(nextChunk, freeChunks chan *bytes.Buffer, nextImg chan *image.Image, quit chan bool) {
+    defer close(nextImg)
+    scanOn=false
+    for {
+        select {
+        case <-quit:
+            close(nextImg)
+            scanOn=true
+            return
+        default:
+            buf := <- nextChunk
             //Discard incoming frames if there are already some frames queued
             if len(nextImg) == 0 {
                 //img, err := mjpeg.Decode(response.Body)
@@ -90,6 +111,7 @@ func processHttp(response *http.Response, nextImg chan *image.Image, quit chan b
                 if img != nil {
                     nextImg <- &img
                 }
+                freeChunks <- buf
             }
         }
     }
@@ -191,10 +213,16 @@ func http_mjpeg(URL string) {
     response, err = http.Get(URL)
     fmt.Printf("Connected to %v\n", URL)
     nextImg := make(chan *image.Image, 0)
+    nextChunk := make(chan *bytes.Buffer, 0)
+    freeChunks := make(chan *bytes.Buffer, 10)
     quit := make(chan bool)
     fmt.Println("Waiting for stream...")
     go processImage(nextImg, quit)
-    go processHttp(response, nextImg, quit)
+    go processChunk(nextChunk, freeChunks, nextImg, quit)
+    go processHttp(response, nextChunk, freeChunks, nextImg, quit)
+    freeChunks <-  bytes.NewBuffer(make([]byte, 0, 1024*1024*10))
+    freeChunks <-  bytes.NewBuffer(make([]byte, 0, 1024*1024*10))
+    freeChunks <-  bytes.NewBuffer(make([]byte, 0, 1024*1024*10))
     _ = <-quit
     scanOn=true
 }
