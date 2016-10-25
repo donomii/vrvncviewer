@@ -87,6 +87,7 @@ var (
     gallery []string
     reCalcNeeded bool
     prevTime int64
+    FPS int
 )
 
 var scanOn = true
@@ -303,6 +304,7 @@ func scanHosts() {
     for j:=1;j<255;j++ {
         if scanOn {
             RenderPara(&activeFormatter, 240,240, 800, 600, u8Pix, fmt.Sprintf("Scanning\n%v.%v.%v.%v", ip_chunks[0], ip_chunks[1], ip_chunks[2], fmt.Sprintf("%v", j)), false, true)
+            PasteText(50.0, 1, 1, fmt.Sprintf("%v", FPS), u8Pix, false)
             testIP := fmt.Sprintf("%v.%v", classC, j)
             //log.Printf("testIP: %v\n", testIP)
             <-connectCh
@@ -390,20 +392,15 @@ var lastDraw time.Time
 
 func onPaint(glctx gl.Context, sz size.Event) {
     now := time.Now()
-    f := 0
     if dur := now.Sub(lastDraw); dur > 0 {
-        f = int(time.Second / dur)
-        timeSlice := time.Millisecond * 16 //Have to maintain 60fps to stop user getting sick
+        FPS = int(time.Second / dur)
+        timeSlice := time.Millisecond * 16 //Have to maintain 60fps to stop the user getting sick
         remain := timeSlice-dur
         if remain > 0 {
             return
         }
     }
     lastDraw=now
-    PasteText(50.0, 1, 1, fmt.Sprintf("%v", f), u8Pix, false)
-    if !scanOn {
-        RenderPara(&activeFormatter, 240,0, 800, 600, u8Pix, "Connected", true, true)
-    }
     glctx.Enable(gl.BLEND)
     glctx.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     glctx.Enable( gl.DEPTH_TEST );
@@ -414,7 +411,7 @@ func onPaint(glctx gl.Context, sz size.Event) {
     glctx.UseProgram(program)
 
 
-    
+
     glctx.TexImage2D(gl.TEXTURE_2D, 0, int(clientWidth), int(clientHeight), gl.RGBA, gl.UNSIGNED_BYTE, u8Pix)
 
 

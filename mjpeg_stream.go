@@ -1,8 +1,8 @@
 package main
 import "mime/multipart"
+import "runtime"
 import (
     "bytes"
-    "io/ioutil"
     "log"
     "image/jpeg"
     "mime"
@@ -21,45 +21,63 @@ import (
     "image/draw"
 )
 
-
+// readAll reads from r until an error or EOF and returns the data it read
+// from the internal buffer allocated with a specified capacity.
+func readAll(r io.Reader, buf *bytes.Buffer) (err error) {
+    // If the buffer overflows, we will get bytes.ErrTooLarge.
+    // Return that as an error. Any other panic remains.
+    defer func() {
+        e := recover()
+        if e == nil {
+            err = nil
+            return
+        }
+        if panicErr, ok := e.(error); ok && panicErr == bytes.ErrTooLarge {
+            err = panicErr
+        } else {
+            panic(e)
+        }
+    }()
+    _, err = buf.ReadFrom(r)
+    return
+}
 
 // processHttp receives the HTTP data and tries to decodes images. The images 
 // are sent through a chan for further processing.
 func processHttp(response *http.Response, nextImg chan *image.Image, quit chan bool) {
     decoder,_ := NewDecoderFromResponse(response)
     defer response.Body.Close()
+    defer close(nextImg)
+    buf := bytes.NewBuffer(make([]byte, 0, 1024*1024*10))
+    scanOn=false
     for {
-        scanOn=false
+        buf.Truncate(0)
         select {
         case <-quit:
             close(nextImg)
             scanOn=true
             return
         default:
-            //Discard incoming frames if there are already some frames queued
             p, err := decoder.r.NextPart()
             if err == io.EOF {
+                close(nextImg)
+                scanOn=true
                 return
             }
             if err != nil {
                 log.Fatal(err)
             }
-            slurp, err := ioutil.ReadAll(p)
+            err = readAll(p, buf)
             if err != nil {
-                log.Fatal(err)
+                log.Printf("%v", err)
+                close(nextImg)
+                scanOn=true
+                return
             }
+            //Discard incoming frames if there are already some frames queued
             if len(nextImg) == 0 {
                 //img, err := mjpeg.Decode(response.Body)
-                img, err := jpeg.Decode(bytes.NewReader(slurp))
-                //log.Printf("Unpacked jpeg image type: %v\n", img.(type))
-switch img.(type) {
-case *image.RGBA:
-                log.Printf("Unpacked jpeg image type: RGBA\n")
-    // i in an *image.RGBA
-case *image.NRGBA:
-                log.Printf("Unpacked jpeg image type: NRGBA\n")
-    // i in an *image.NRBGA
-}
+                img, err := jpeg.Decode(bytes.NewReader(buf.Bytes()))
 
                 if err == io.EOF {
                     close(nextImg)
@@ -67,12 +85,11 @@ case *image.NRGBA:
                     return
                 }
                 if err != nil {
-                    fmt.Println(err)
+                    log.Println(err)
                 }
                 if img != nil {
                     nextImg <- &img
                 }
-            } else {
             }
         }
     }
@@ -101,6 +118,7 @@ func processImage(nextImg chan *image.Image, quit chan bool) {
     rgba := NewRGBA(int(clientWidth), int(clientHeight))
     for {
         scanOn=false
+        runtime.GC()
         i, ok := <-nextImg
 
         //addLabel(i, 100, 100, "HELLO")
@@ -120,6 +138,7 @@ func processImage(nextImg chan *image.Image, quit chan bool) {
             clientWidth = uint(newW)
             clientHeight = uint(newH)
             fmt.Printf("Chose new width: %v, height %v\n", clientWidth, clientHeight)
+            rgba = NewRGBA(int(clientWidth), int(clientHeight))
             //dim := clientWidth*clientHeight*4
             //u8Pix = make([]uint8, dim, dim)
         }
@@ -129,18 +148,8 @@ func processImage(nextImg chan *image.Image, quit chan bool) {
         draw.Draw(rgba, rect, img, rect.Min, draw.Src)
         u8Pix = rgba.Pix
 
-        /*for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-            for x := bounds.Min.X; x < bounds.Max.X; x++ {
-                r, g, b, _ := img.At(x, y).RGBA()
-                // A color's RGBA method returns values in the range [0, 65535].
-                start := uint(y)*clientWidth*3 + uint(x)*3
-                u8Pix[start] = uint8(r*255/65535)
-                u8Pix[start+1] = uint8(g*255/65535)
-                u8Pix[start+2] = uint8(b*255/65535)
-        }
-    }*/
-    //Add some kind of flashing thing to the texture so we can see that the link is still active
-    //fmt.Println("Looping")
+    RenderPara(&activeFormatter, 240,0, 800, 600, u8Pix, "Connected", true, true)
+    PasteText(50.0, 1, 1, fmt.Sprintf("%v", FPS), u8Pix, false)
     }
     scanOn=true
     quit <- true
@@ -181,7 +190,7 @@ func http_mjpeg(URL string) {
     fmt.Printf("Passed quick check %v\n", URL)
     response, err = http.Get(URL)
     fmt.Printf("Connected to %v\n", URL)
-    nextImg := make(chan *image.Image, 30)
+    nextImg := make(chan *image.Image, 0)
     quit := make(chan bool)
     fmt.Println("Waiting for stream...")
     go processImage(nextImg, quit)
