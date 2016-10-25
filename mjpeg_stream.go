@@ -1,6 +1,5 @@
 package main
 import "mime/multipart"
-import "runtime"
 import (
     "bytes"
     "log"
@@ -76,7 +75,11 @@ func processHttp(response *http.Response, nextChunk, freeChunks chan *bytes.Buff
             }
             if (len(freeChunks)>0) {
                 nextChunk <- buf
+            } else {
+                log.Printf("Skip!\n")
+                freeChunks <- buf
             }
+            PasteText(50.0, 1, 1, fmt.Sprintf("%v", FPS), u8Pix, false)
         }
     }
 }
@@ -140,7 +143,7 @@ func processImage(nextImg chan *image.Image, quit chan bool) {
     rgba := NewRGBA(int(clientWidth), int(clientHeight))
     for {
         scanOn=false
-        runtime.GC()
+        //runtime.GC()
         i, ok := <-nextImg
 
         //addLabel(i, 100, 100, "HELLO")
@@ -171,7 +174,6 @@ func processImage(nextImg chan *image.Image, quit chan bool) {
         u8Pix = rgba.Pix
 
     RenderPara(&activeFormatter, 240,0, 800, 600, u8Pix, "Connected", true, true)
-    PasteText(50.0, 1, 1, fmt.Sprintf("%v", FPS), u8Pix, false)
     }
     scanOn=true
     quit <- true

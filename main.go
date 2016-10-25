@@ -29,6 +29,7 @@
 package main
 
 import "github.com/pkg/profile"
+import runtimeDebug "runtime/debug"
 import (
     "strings"
     "net"
@@ -168,6 +169,7 @@ func do_profile() {
 }
 var activeFormatter FormatParams
 func main() {
+    runtimeDebug.SetGCPercent(500)
     activeFormatter = FormatParams{&color.RGBA{255,255,255,255},0,0, 50.0,0,0}
     log.Printf("Starting main...")
     sceneCam = sceneCamera.New()
