@@ -49,3 +49,4 @@ vrvncviewer currently runs at around 3 frames per second, regardless of settings
 * Improve frame rate
 * Add cursor to head tracking
 * Add more status messages
+* Needs error messages for e.g. wrong password
