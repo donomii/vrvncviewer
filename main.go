@@ -28,9 +28,11 @@
 //   $ go install golang.org/x/mobile/example/basic && basic
 package main
 
-import "github.com/pkg/profile"
-import runtimeDebug "runtime/debug"
+//import "github.com/pkg/profile"
+//import runtimeDebug "runtime/debug"
 import (
+    "image/color"
+    "github.com/donomii/glim"
     "strings"
     "net"
     "errors"
@@ -38,7 +40,6 @@ import (
     "log"
     "runtime"
 
-    "image/color"
     "golang.org/x/mobile/app"
     "golang.org/x/mobile/event/lifecycle"
     "golang.org/x/mobile/event/paint"
@@ -91,7 +92,8 @@ var (
     FPS int
 )
 
-var scanOn = true
+var lockScreen = true  //Don't do 3D head tracking yet, keep the view pointing at the default coordinates
+var scanOn = true       //Search the local network for vnc servers
 var vMeta map[string]vertexMeta
 var triBuff[]byte
 var vTrisf map[string][]float32
@@ -164,13 +166,15 @@ var texData = f32.Bytes(binary.LittleEndian,
 func do_profile() {
     //defer profile.Start(profile.MemProfile).Stop()
     //defer profile.Start(profile.TraceProfile).Stop()
-    defer profile.Start(profile.CPUProfile).Stop()
+    //defer profile.Start(profile.CPUProfile).Stop()
     time.Sleep(60*time.Second)
 }
-var activeFormatter FormatParams
+
+var activeFormatter *glim.FormatParams
 func main() {
-    runtimeDebug.SetGCPercent(500)
-    activeFormatter = FormatParams{&color.RGBA{255,255,255,255},0,0, 50.0,0,0}
+    //runtimeDebug.SetGCPercent(500)
+    activeFormatter = glim.NewFormatter()
+    activeFormatter.Colour = &color.RGBA{255,255,255,255}
     log.Printf("Starting main...")
     sceneCam = sceneCamera.New()
     runtime.GOMAXPROCS(2)
@@ -250,6 +254,7 @@ func main() {
                     }
                 }
             }
+            if lockScreen { theatreCamera = mgl32.LookAt(0.0, 0.0, 0.1, 0.0, 0.0, -0.5, 0.0, 1.0, 0.0) }
         }
     })
 }
@@ -294,40 +299,67 @@ func externalIP() (string, error) {
     return "", errors.New("are you connected to the network?")
 }
 
-func scanHosts() {
+func zeroBytes(b []byte) {
+    for i, _ := range b {
+        b[i]=0
+    }
+}
+
+func scanHosts(timeout int) {
     connectCh = make(chan bool, 30)
-    for i:=1; i<30; i++ {
-        connectCh <- true
-    }
-    ip, _ := externalIP()
-    ip_chunks := strings.Split(ip, ".")
-    classC := strings.Join(ip_chunks[:3], ".")
-    //log.Printf("IP: %v\n", classC)
-    for j:=1;j<255;j++ {
-        if scanOn {
-            RenderPara(&activeFormatter, 240,240, 800, 600, u8Pix, fmt.Sprintf("Scanning\n%v.%v.%v.%v", ip_chunks[0], ip_chunks[1], ip_chunks[2], fmt.Sprintf("%v", j)), false, true)
-            PasteText(50.0, 1, 1, fmt.Sprintf("%v", FPS), u8Pix, false)
-            testIP := fmt.Sprintf("%v.%v", classC, j)
-            //log.Printf("testIP: %v\n", testIP)
-            <-connectCh
-            //fmt.Printf("%v:5900\n",testIP)
-            go run_vnc(fmt.Sprintf("%v:5900",testIP))
-            <-connectCh
-            //fmt.Printf("http://%v:8080/\n",testIP)
-            go http_mjpeg(fmt.Sprintf("http://%v:8080/",testIP))
-        } else {
+    go func() {
+        for i:=1; i<30; i++ {
+            connectCh <- true
+            time.Sleep(333*time.MilliSecond)
         }
+    }()
+    if timeout > 10000 {
+        timeout = 10000
     }
-    time.Sleep(500*time.Millisecond)
+    ip, err := externalIP()
+    if err==nil {
+        log.Printf("Found base IP number: %v\n", ip)
+        //log.Printf("Using timeout: %v\n", timeout)
+        ip_chunks := strings.Split(ip, ".")
+        classC := strings.Join(ip_chunks[:3], ".")
+        //log.Printf("IP: %v\n", classC)
+        greyFormatter := glim.NewFormatter();
+        greyFormatter.Colour = &color.RGBA{128,128,128,255}
+        
+        for j:=1;j<255;j++ {
+            if scanOn {
+                zeroBytes(u8Pix)
+                glim.RenderPara(activeFormatter, 24,0, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, fmt.Sprintf("Searching for servers\non your local net"), false, true, false)
+                glim.RenderPara(greyFormatter, 24,480, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, fmt.Sprintf("ip address:%v", ip), false, true, false)
+                glim.RenderPara(activeFormatter, 24,240, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, fmt.Sprintf("Scanning: %v.%v.%v.%v", ip_chunks[0], ip_chunks[1], ip_chunks[2], fmt.Sprintf("%v", j)), false, true, false)
+                //glim.PasteText(50.0, 1, 1, int(clientWidth), int(clientHeight), fmt.Sprintf("%v", FPS), u8Pix, false)
+                testIP := fmt.Sprintf("%v.%v", classC, j)
+                log.Printf("testIP: %v\n", testIP)
+                <-connectCh
+                //fmt.Printf("%v:5900\n",testIP)
+                go run_vnc(fmt.Sprintf("%v:5900",testIP), timeout)
+                <-connectCh
+                //fmt.Printf("http://%v:8080/\n",testIP)
+                go http_mjpeg(fmt.Sprintf("http://%v:8080/",testIP), timeout)
+                lockScreen = true
+            } else {
+                time.Sleep(1*time.Second)
+                scanHosts(timeout)
+            }
+        }
+    } else {
+                glim.RenderPara(activeFormatter, 240,0, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, "NO NETWORK", false, true, false)
+
+    }
     //fmt.Println("Finished scan")
-    scanHosts()
+    scanHosts(timeout+1000)
 }
 
 func onStart(glctx gl.Context) {
     log.Printf("Onstart callback...")
     dim := clientWidth*clientHeight*4
-    u8Pix = make([]uint8, dim, dim)
-    go scanHosts()
+    u8Pix = make([]uint8, dim+1, dim+1)
+    go scanHosts(3000)
     fmt.Printf("Waiting on connnection\n")
     //for {
         //time.Sleep(50 * time.Millisecond)

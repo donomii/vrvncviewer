@@ -1,6 +1,8 @@
 package main
 import "mime/multipart"
 import (
+    //"github.com/donomii/glim"
+    //"runtime/debug"
     "bytes"
     "log"
     "image/jpeg"
@@ -68,7 +70,7 @@ func processHttp(response *http.Response, nextChunk, freeChunks chan *bytes.Buff
             }
             err = readAll(p, buf)
             if err != nil {
-                log.Printf("%v", err)
+                //log.Printf("%v", err)
                 close(nextImg)
                 scanOn=true
                 return
@@ -79,7 +81,7 @@ func processHttp(response *http.Response, nextChunk, freeChunks chan *bytes.Buff
                 log.Printf("Skip!\n")
                 freeChunks <- buf
             }
-            PasteText(50.0, 1, 1, fmt.Sprintf("%v", FPS), u8Pix, false)
+            //glim.PasteText(50.0, 1, 1, int(clientWidth), int(clientHeight), fmt.Sprintf("%v", FPS), u8Pix, false)
         }
     }
 }
@@ -91,6 +93,9 @@ func processChunk(nextChunk, freeChunks chan *bytes.Buffer, nextImg chan *image.
     defer close(nextImg)
     scanOn=false
     for {
+        //var stats debug.GCStats
+        //debug.ReadGCStats(&stats)
+        //log.Println(stats)
         select {
         case <-quit:
             close(nextImg)
@@ -114,6 +119,7 @@ func processChunk(nextChunk, freeChunks chan *bytes.Buffer, nextImg chan *image.
                 if img != nil {
                     nextImg <- &img
                 }
+                lockScreen = false
                 freeChunks <- buf
             }
         }
@@ -135,7 +141,7 @@ func addLabel(img *image.Image, x, y int, label string) {
 }
 
 func NewRGBA(width,height int) *image.RGBA {
-    return image.NewRGBA(image.Rectangle{image.Point{0,0},image.Point{800,600}})
+    return image.NewRGBA(image.Rectangle{image.Point{0,0},image.Point{width,height}})
 }
 
 // processImage receives images through a chan, decodes them an updates the texture
@@ -164,8 +170,8 @@ func processImage(nextImg chan *image.Image, quit chan bool) {
             clientHeight = uint(newH)
             fmt.Printf("Chose new width: %v, height %v\n", clientWidth, clientHeight)
             rgba = NewRGBA(int(clientWidth), int(clientHeight))
-            //dim := clientWidth*clientHeight*4
-            //u8Pix = make([]uint8, dim, dim)
+            dim := clientWidth*clientHeight*4
+            u8Pix = make([]uint8, dim, dim)
         }
         //The graphics buffers are ready, we can start using them, even if they are blank
         startDrawing = true
@@ -173,7 +179,7 @@ func processImage(nextImg chan *image.Image, quit chan bool) {
         draw.Draw(rgba, rect, img, rect.Min, draw.Src)
         u8Pix = rgba.Pix
 
-    RenderPara(&activeFormatter, 240,0, 800, 600, u8Pix, "Connected", true, true)
+        //glim.RenderPara(&activeFormatter, 240,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight), 0,0, u8Pix, "Connected", true, true, false)
     }
     scanOn=true
     quit <- true
@@ -199,11 +205,10 @@ func NewDecoderFromResponse(res *http.Response) (*Decoder, error) {
     return NewDecoder(res.Body, strings.Trim(param["boundary"], "-")), nil
 }
 
-func http_mjpeg(URL string) {
+func http_mjpeg(URL string, timeout int) {
     //fmt.Printf("Opening %v\n", URL)
-    timeout := time.Duration(2000 * time.Millisecond)
     client := http.Client{
-        Timeout: timeout,
+        Timeout: time.Duration(timeout) * time.Duration(time.Millisecond),
     }
     response, err := client.Get(URL)
     if err != nil {

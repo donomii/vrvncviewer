@@ -10,9 +10,9 @@ import "golang.org/x/net/context"
 var im *image.NRGBA
 
 
-func run_vnc (server_port string) {
+func run_vnc (server_port string, timeout int) {
 // Establish TCP connection to VNC server.
-nc, err := net.DialTimeout("tcp", server_port, 100*time.Millisecond)
+nc, err := net.DialTimeout("tcp", server_port, time.Duration(timeout)*time.Millisecond)
 if err != nil {
   //log.Fatalf("Error connecting to VNC host. %v", err)
     connectCh <- true
@@ -73,6 +73,7 @@ if err != nil {
             }
         }
       }
+      lockScreen = false
     }
     scanOn = true
 }
