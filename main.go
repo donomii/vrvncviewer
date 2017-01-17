@@ -63,6 +63,8 @@ import "github.com/go-gl/mathgl/mgl32"
 var clientWidth=uint(800)
 var clientHeight=uint(600)
 var u8Pix []uint8
+var status = ""
+
 var (
     startDrawing bool
     imageData image.Image
@@ -310,31 +312,32 @@ func scanHosts(timeout int) {
     go func() {
         for i:=1; i<30; i++ {
             connectCh <- true
-            time.Sleep(333*time.MilliSecond)
+            time.Sleep(333*time.Millisecond)
         }
     }()
     if timeout > 10000 {
         timeout = 10000
     }
     ip, err := externalIP()
+    status =  fmt.Sprintf("ip address:%v", ip)
     if err==nil {
         log.Printf("Found base IP number: %v\n", ip)
         //log.Printf("Using timeout: %v\n", timeout)
         ip_chunks := strings.Split(ip, ".")
         classC := strings.Join(ip_chunks[:3], ".")
         //log.Printf("IP: %v\n", classC)
-        greyFormatter := glim.NewFormatter();
-        greyFormatter.Colour = &color.RGBA{128,128,128,255}
+        redFormatter := glim.NewFormatter();
+        redFormatter.Colour = &color.RGBA{255,128,128,255}
         
         for j:=1;j<255;j++ {
             if scanOn {
                 zeroBytes(u8Pix)
                 glim.RenderPara(activeFormatter, 24,0, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, fmt.Sprintf("Searching for servers\non your local net"), false, true, false)
-                glim.RenderPara(greyFormatter, 24,480, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, fmt.Sprintf("ip address:%v", ip), false, true, false)
                 glim.RenderPara(activeFormatter, 24,240, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, fmt.Sprintf("Scanning: %v.%v.%v.%v", ip_chunks[0], ip_chunks[1], ip_chunks[2], fmt.Sprintf("%v", j)), false, true, false)
+                glim.RenderPara(redFormatter, 24,380, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, status, false, true, false)
                 //glim.PasteText(50.0, 1, 1, int(clientWidth), int(clientHeight), fmt.Sprintf("%v", FPS), u8Pix, false)
                 testIP := fmt.Sprintf("%v.%v", classC, j)
-                log.Printf("testIP: %v\n", testIP)
+                //log.Printf("testIP: %v\n", testIP)
                 <-connectCh
                 //fmt.Printf("%v:5900\n",testIP)
                 go run_vnc(fmt.Sprintf("%v:5900",testIP), timeout)
@@ -348,7 +351,7 @@ func scanHosts(timeout int) {
             }
         }
     } else {
-                glim.RenderPara(activeFormatter, 240,0, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, "NO NETWORK", false, true, false)
+        glim.RenderPara(activeFormatter, 240, 240, 0,0, int(clientWidth), int(clientHeight), int(clientWidth), int(clientHeight),0,0, u8Pix, "NO NETWORK", false, true, false)
 
     }
     //fmt.Println("Finished scan")
