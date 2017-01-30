@@ -309,18 +309,14 @@ func zeroBytes(b []byte) {
 
 func scanHosts(timeout int) {
     connectCh = make(chan bool, 30)
-    go func() {
-        for i:=1; i<30; i++ {
-            connectCh <- true
-            time.Sleep(333*time.Millisecond)
-        }
-    }()
     if timeout > 10000 {
         timeout = 10000
     }
     ip, err := externalIP()
-    status =  fmt.Sprintf("ip address:%v", ip)
     if err==nil {
+        if status == "" {
+            status =  fmt.Sprintf("ip address:%v", ip)
+        }
         log.Printf("Found base IP number: %v\n", ip)
         //log.Printf("Using timeout: %v\n", timeout)
         ip_chunks := strings.Split(ip, ".")
@@ -406,6 +402,12 @@ func onStart(glctx gl.Context) {
 
     //images = glutil.NewImages(glctx)
     //fps = debug.NewFPS(images)
+    go func() {
+        for i:=1; i<30; i++ {
+            connectCh <- true
+            time.Sleep(333*time.Millisecond)
+        }
+    }()
 }
 
 func onStop(glctx gl.Context) {

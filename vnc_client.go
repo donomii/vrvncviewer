@@ -20,7 +20,7 @@ func run_vnc (server_port string, timeout int) {
         connectCh <- true
         return
     }
-    scanOn = false
+    //scanOn = false
 
     // Negotiate connection with the server.
     vcc := vnc.NewClientConfig("aaaaaaaa")
@@ -28,8 +28,8 @@ func run_vnc (server_port string, timeout int) {
     log.Println("Connected to server",server_port)
     //go requestUpdates(vc)
     if err != nil {
-      log.Printf("Error: %s : %v", server_port, err)
-      status = fmt.Sprintf("!! %s : %v !!", server_port, err)
+        log.Printf("Error: %s : %v", server_port, err)
+        status = fmt.Sprintf("!! %s : %v !!", server_port, err)
     } else {
         if !(clientWidth == uint(vc.FramebufferWidth())) || !(clientHeight == uint(vc.FramebufferHeight())) {
             clientWidth, clientHeight = uint(vc.FramebufferWidth()), uint(vc.FramebufferHeight())
@@ -78,7 +78,7 @@ func run_vnc (server_port string, timeout int) {
           lockScreen = false
         }
     }
-    scanOn = true
+    //scanOn = true
 }
 
 func requestUpdates (vc *vnc.ClientConn) {
